@@ -312,6 +312,7 @@
         <div id="word-list-area"></div>
         <button class="btn btn-blue" style="width:100%; margin-top:10px;" onclick="addNewDateGroup()">+ Add New Date</button>
         <button class="btn btn-green" style="width:100%; margin-top:15px;" onclick="saveAdminChanges()">Save & Exit</button>
+        <button class="btn btn-red" style="width:100%; margin-top:10px; opacity:0.6;" onclick="if(confirm('모든 데이터를 초기화하시겠습니까? (저장된 정보가 삭제됩니다)')) { localStorage.removeItem(STORAGE_KEY); location.reload(); }">⚠️ Reset Data (초기화)</button>
     </div>
 
     <div id="study-view">
@@ -405,12 +406,31 @@
     };
 
     let yerinData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultData;
+    
+    // 데이터 유효성 검사 (0/0 에러 방지)
+    if (!yerinData || Object.keys(yerinData).length === 0) {
+        yerinData = JSON.parse(JSON.stringify(defaultData));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(yerinData));
+    }
+
     let currentList = []; let wrongList = []; let mode = 1; let idx = 0; let selDate = "";
     let canvas, ctx, drawing = false;
 
     function stopSpeech() { window.speechSynthesis.cancel(); }
     function stopAndHome() { stopSpeech(); showDates(); }
-    function stopAndMode(m) { stopSpeech(); mode = m; idx = 0; if(!selDate) return showDates(); currentList = [...yerinData[selDate]]; if(m >= 2) currentList.sort(() => Math.random() - 0.5); wrongList = []; render(); }
+    function stopAndMode(m) { 
+        stopSpeech(); 
+        mode = m; 
+        idx = 0; 
+        if(!selDate || !yerinData[selDate]) {
+            showDates();
+            return;
+        }
+        currentList = [...yerinData[selDate]]; 
+        if(m >= 2) currentList.sort(() => Math.random() - 0.5); 
+        wrongList = []; 
+        render(); 
+    }
     function stopAndToggleAdmin() { const admin = document.getElementById('admin-panel'); const study = document.getElementById('study-view'); if(admin.style.display === 'block') { admin.style.display = 'none'; study.style.display = 'block'; showDates(); } else { admin.style.display = 'block'; study.style.display = 'none'; refreshAdminList(); } }
 
     function showDates() { 
@@ -527,7 +547,7 @@
         try {
             recognition = new SpeechRecognition();
             recognition.lang = 'en-US';
-            recognition.interimResults = false;
+            recognition.interimResults = true; // 실시간 텍스트 표시
             recognition.maxAlternatives = 1;
 
             recognition.onstart = () => { 
@@ -537,20 +557,33 @@
             };
 
             recognition.onresult = (event) => {
-                const spoken = event.results[0][0].transcript.toLowerCase().trim().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, "");
-                const target = currentList[idx].word.toLowerCase().trim();
-                
-                if (spoken === target || spoken.includes(target)) {
-                    ansBox.innerText = "Excellent! " + currentList[idx].word;
-                    ansBox.style.color = "#10b981";
-                    speak("Excellent!"); 
-                    document.getElementById('next-btn').style.display = "block";
-                    setTimeout(() => { idx++; render(); }, 1500);
-                } else {
-                    ansBox.innerText = `You said: "${spoken}"?`;
-                    ansBox.style.color = "#ef4444";
-                    speak("Try again");
-                    if(!wrongList.some(i => i.word === currentList[idx].word)) wrongList.push(currentList[idx]);
+                let interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        const spoken = event.results[i][0].transcript.toLowerCase().trim().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, "");
+                        const target = currentList[idx].word.toLowerCase().trim();
+                        
+                        if (spoken === target || spoken.includes(target)) {
+                            ansBox.innerText = "Excellent! " + currentList[idx].word;
+                            ansBox.style.color = "#10b981";
+                            speak("Excellent!"); 
+                            document.getElementById('next-btn').style.display = "block";
+                            setTimeout(() => { 
+                                if (recognition) recognition.stop();
+                                idx++; 
+                                render(); 
+                            }, 1500);
+                        } else {
+                            ansBox.innerText = `You said: "${spoken}"?`;
+                            ansBox.style.color = "#ef4444";
+                            speak("Try again");
+                            if(!wrongList.some(i => i.word === currentList[idx].word)) wrongList.push(currentList[idx]);
+                        }
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                        ansBox.innerText = interimTranscript;
+                        ansBox.style.color = "var(--text-muted)";
+                    }
                 }
             };
 
