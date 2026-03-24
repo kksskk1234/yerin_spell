@@ -307,6 +307,10 @@
         <button class="icon-btn" onclick="stopAndToggleAdmin()">⚙️</button>
     </div>
     
+    <div id="browser-warning" style="display:none; background:#ff5252; color:white; padding:8px; font-size:0.85rem; text-align:center; font-weight:700;">
+        ⚠️ 카카오톡 등을 통해 방문하셨나요? 음성 인식을 위해 '크롬(Chrome)' 앱으로 열어주세요!
+    </div>
+    
     <div id="admin-panel" style="display:none; padding:20px; background: transparent; height: 600px; overflow-y: auto;">
         <h3>Settings</h3>
         <div id="word-list-area"></div>
@@ -405,12 +409,19 @@
         ]
     };
 
-    let yerinData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultData;
+    // LocalStorage 예외 처리 (인앱 브라우저 대응)
+    let yerinData;
+    try {
+        yerinData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultData;
+    } catch (e) {
+        console.warn("LocalStorage access failed:", e);
+        yerinData = JSON.parse(JSON.stringify(defaultData));
+    }
     
     // 데이터 유효성 검사 (0/0 에러 방지)
     if (!yerinData || Object.keys(yerinData).length === 0) {
         yerinData = JSON.parse(JSON.stringify(defaultData));
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(yerinData));
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(yerinData)); } catch(e){}
     }
 
     let currentList = []; let wrongList = []; let mode = 1; let idx = 0; let selDate = "";
@@ -530,10 +541,12 @@
             }
         }
 
-        // 2. 마이크 권한 사전 확인 (모바일 브라우저 권장)
+        // 2. 마이크 권한 사전 확인 및 스트림 정리 (갤럭시 크롬 필수)
         try {
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                await navigator.mediaDevices.getUserMedia({ audio: true });
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                // 중요: 권한 확인 후 스트림을 즉시 닫아야 음성 인식 엔진이 마이크를 사용할 수 있음
+                stream.getTracks().forEach(track => track.stop());
             }
         } catch (e) {
             console.error("Microphone access denied:", e);
@@ -750,7 +763,15 @@
         stopAndToggleAdmin();
     }
 
-    window.onload = showDates;
+    window.onload = () => {
+        showDates();
+        // 인앱 브라우저 감지 문구 노출
+        const ua = navigator.userAgent.toLowerCase();
+        if (ua.includes('kakao') || ua.includes('line') || (ua.includes('android') && !ua.includes('chrome'))) {
+            const warning = document.getElementById('browser-warning');
+            if (warning) warning.style.display = 'block';
+        }
+    };
 </script>
 </body>
 </html>
