@@ -13,6 +13,35 @@ export default defineConfig(({ mode }) => {
       {
         name: 'recognize-api-dev',
         configureServer(server) {
+          // In-memory stand-in for Netlify Blobs during local dev.
+          let devWords: unknown = null
+          server.middlewares.use('/api/words', async (req: any, res: any) => {
+            const send = (status: number, payload: unknown) => {
+              res.statusCode = status
+              res.setHeader('content-type', 'application/json')
+              res.end(JSON.stringify(payload))
+            }
+            if (req.method === 'GET') return send(200, devWords)
+            if (req.method === 'PUT' || req.method === 'POST') {
+              let raw = ''
+              await new Promise<void>((resolve) => {
+                req.on('data', (chunk: any) => (raw += chunk))
+                req.on('end', () => resolve())
+              })
+              try {
+                devWords = raw ? JSON.parse(raw) : null
+              } catch {
+                return send(400, { error: 'Invalid JSON body.' })
+              }
+              return send(200, { ok: true })
+            }
+            if (req.method === 'DELETE') {
+              devWords = null
+              return send(200, { ok: true })
+            }
+            return send(405, { error: 'Method not allowed.' })
+          })
+
           server.middlewares.use('/api/recognize', async (req: any, res: any) => {
             const send = (status: number, payload: unknown) => {
               res.statusCode = status

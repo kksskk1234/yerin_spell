@@ -161,7 +161,7 @@ function apply(): void {
 }
 
 function onReset(): void {
-  if (confirm('기본 단어 목록으로 되돌릴까요? 업로드한 데이터는 사라집니다.')) {
+  if (confirm('기본 단어 목록으로 되돌릴까요? 모든 기기에서 업로드한 데이터가 사라집니다.')) {
     resetWordData()
     emit('close')
   }

@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { yerinData } from '../data/words'
 import type { Mode, Word, WordData } from '../types'
 import { useSpeech } from './useSpeech'
+import { fetchSharedWords, saveSharedWords, clearSharedWords } from './useWordSync'
 
 export type Screen = 'dates' | 'study' | 'celebration'
 
@@ -41,6 +42,19 @@ function createStudy() {
   /** The active word set (from an uploaded test sheet, or the built-in default). */
   const wordData = ref<WordData>(loadWordData())
   const dates = computed(() => Object.keys(wordData.value))
+
+  // Pull the shared word list from the server so every device sees the same
+  // words. Local cache (above) shows instantly; this updates it once fetched.
+  void fetchSharedWords().then((shared) => {
+    if (shared && Object.keys(shared).length > 0 && screen.value === 'dates') {
+      wordData.value = shared
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(shared))
+      } catch {
+        // ignore cache write failure
+      }
+    }
+  })
 
   const currentWord = computed<Word | undefined>(() => currentList.value[idx.value])
   const finished = computed(() => idx.value >= currentList.value.length)
@@ -102,7 +116,7 @@ function createStudy() {
     screen.value = 'celebration'
   }
 
-  /** Replace the word set with uploaded/imported data and persist it. */
+  /** Replace the word set with uploaded/imported data and persist + share it. */
   function applyWordData(data: WordData): void {
     stop()
     wordData.value = data
@@ -111,11 +125,13 @@ function createStudy() {
     } catch {
       // Persisting failed (e.g. private mode) — keep it in memory anyway.
     }
+    // Share with all other devices.
+    void saveSharedWords(data)
     selDate.value = ''
     screen.value = 'dates'
   }
 
-  /** Forget any imported data and restore the built-in default word set. */
+  /** Forget imported data and restore the built-in default everywhere. */
   function resetWordData(): void {
     stop()
     try {
@@ -123,6 +139,7 @@ function createStudy() {
     } catch {
       // ignore
     }
+    void clearSharedWords()
     wordData.value = yerinData
     selDate.value = ''
     screen.value = 'dates'
