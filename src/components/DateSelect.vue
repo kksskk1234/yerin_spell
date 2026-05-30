@@ -29,6 +29,7 @@ const { currentColor, dates, startStudy } = useStudy()
    to stop the drawing pad from scrolling the page). */
 .date-screen {
   flex: 1;
+  min-height: 0;
   align-self: stretch;
   width: 100%;
   overflow-y: auto;

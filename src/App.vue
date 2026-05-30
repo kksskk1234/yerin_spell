@@ -32,7 +32,7 @@ const showImport = ref(false)
       </button>
     </div>
 
-    <div style="display: flex; flex-direction: column; height: 100%">
+    <div style="display: flex; flex-direction: column; flex: 1; min-height: 0">
       <template v-if="screen === 'study'">
         <div class="nav-tabs">
           <div class="tab" :class="{ active: mode === 1 }" @click="setMode(1)">Step 1</div>
