@@ -1,8 +1,21 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useStudy } from '../composables/useStudy'
 import ColorPicker from './ColorPicker.vue'
 
 const { currentColor, dates, startStudy } = useStudy()
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
+/** "July Week 2 Study" — month + week-of-month of the day the app is opened. */
+const title = computed(() => {
+  const now = new Date()
+  const week = Math.ceil(now.getDate() / 7)
+  return `${MONTHS[now.getMonth()]} Week ${week} Study`
+})
 </script>
 
 <template>
@@ -11,7 +24,7 @@ const { currentColor, dates, startStudy } = useStudy()
       <span style="font-weight: bold; color: #555; font-size: 0.9rem">Pick your Pen Color! 🎨</span>
       <ColorPicker v-model="currentColor" />
     </div>
-    <h2 style="color: var(--primary-dark); margin-bottom: 10px">June Week 1 Study</h2>
+    <h2 style="color: var(--primary-dark); margin-bottom: 10px">{{ title }}</h2>
     <button
       v-for="d in dates"
       :key="d"
