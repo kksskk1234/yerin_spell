@@ -43,18 +43,67 @@ function createStudy() {
   const wordData = ref<WordData>(loadWordData())
   const dates = computed(() => Object.keys(wordData.value))
 
-  // Pull the shared word list from the server so every device sees the same
-  // words. Local cache (above) shows instantly; this updates it once fetched.
-  void fetchSharedWords().then((shared) => {
-    if (shared && Object.keys(shared).length > 0 && screen.value === 'dates') {
-      wordData.value = shared
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(shared))
-      } catch {
-        // ignore cache write failure
-      }
+  /** Server data that arrived mid-study — applied once we're back on the date list. */
+  const pendingShared = ref<WordData | null>(null)
+  let syncing = false
+  /** In-flight write to the server. A sync must wait for it, or it would read
+   *  back the pre-upload list and overwrite what we just registered. */
+  let writing: Promise<void> | null = null
+
+  /** Run a server write, keeping it visible to syncFromServer() while in flight. */
+  function track(write: Promise<void>): void {
+    writing = write.finally(() => {
+      writing = null
+    })
+  }
+
+  function cacheWordData(data: WordData): void {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    } catch {
+      // Persisting failed (e.g. private mode) — keep it in memory anyway.
     }
-  })
+  }
+
+  /** Swap in the new word set. Any date the child had selected may be gone. */
+  function useWordData(data: WordData): void {
+    wordData.value = data
+    pendingShared.value = null
+    selDate.value = ''
+  }
+
+  /**
+   * Pull the shared word list from the server so every device sees the same
+   * words. Local cache shows instantly; this updates it once fetched.
+   * Runs on start AND every time the app comes back to the foreground — a
+   * tablet left open on the home screen would otherwise never see words that
+   * were uploaded from another device.
+   */
+  async function syncFromServer(): Promise<void> {
+    if (syncing) return
+    syncing = true
+    try {
+      if (writing) await writing
+      const shared = await fetchSharedWords()
+      if (!shared || Object.keys(shared).length === 0) return
+      cacheWordData(shared)
+      // Mid-study: don't yank the words out from under the child — hold them
+      // until they come back to the date list (instead of dropping them).
+      if (screen.value === 'dates') useWordData(shared)
+      else pendingShared.value = shared
+    } finally {
+      syncing = false
+    }
+  }
+
+  void syncFromServer()
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') void syncFromServer()
+    })
+    window.addEventListener('focus', () => void syncFromServer())
+  }
 
   const currentWord = computed<Word | undefined>(() => currentList.value[idx.value])
   const finished = computed(() => idx.value >= currentList.value.length)
@@ -64,6 +113,7 @@ function createStudy() {
 
   function goHome(): void {
     stop()
+    if (pendingShared.value) useWordData(pendingShared.value)
     screen.value = 'dates'
   }
 
@@ -119,15 +169,10 @@ function createStudy() {
   /** Replace the word set with uploaded/imported data and persist + share it. */
   function applyWordData(data: WordData): void {
     stop()
-    wordData.value = data
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-    } catch {
-      // Persisting failed (e.g. private mode) — keep it in memory anyway.
-    }
+    cacheWordData(data)
+    useWordData(data)
     // Share with all other devices.
-    void saveSharedWords(data)
-    selDate.value = ''
+    track(saveSharedWords(data))
     screen.value = 'dates'
   }
 
@@ -139,9 +184,8 @@ function createStudy() {
     } catch {
       // ignore
     }
-    void clearSharedWords()
-    wordData.value = yerinData
-    selDate.value = ''
+    track(clearSharedWords())
+    useWordData(yerinData)
     screen.value = 'dates'
   }
 

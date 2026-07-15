@@ -8,7 +8,9 @@ import type { WordData } from '../types'
 
 export async function fetchSharedWords(): Promise<WordData | null> {
   try {
-    const res = await fetch('/api/words')
+    // no-store: always ask the server. A cached response would hide words that
+    // were just uploaded from another device.
+    const res = await fetch('/api/words', { cache: 'no-store' })
     if (!res.ok) return null
     const data = await res.json()
     return data && typeof data === 'object' ? (data as WordData) : null

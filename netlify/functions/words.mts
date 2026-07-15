@@ -14,7 +14,10 @@ import { getStore } from '@netlify/blobs'
 
 const STORE = 'word-data'
 const KEY = 'shared'
-const JSON_HEADERS = { 'content-type': 'application/json' }
+// no-store: the word list must never be served from a browser/CDN cache, or a
+// device keeps showing the previous list (or the default) after someone uploads
+// a new sheet on another device.
+const JSON_HEADERS = { 'content-type': 'application/json', 'cache-control': 'no-store' }
 
 export default async (req: Request): Promise<Response> => {
   const store = getStore(STORE)
